@@ -1,0 +1,14 @@
+{
+  "name": "cicd-sample-app",
+  "version": "1.0.0",
+  "description": "Sample Node.js app for GitHub Actions CI/CD demo",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test server.test.js",
+    "build": "echo 'Build complete'"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
