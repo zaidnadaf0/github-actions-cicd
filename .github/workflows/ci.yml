@@ -6,58 +6,84 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
+    name: Test (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20', '22']
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
         with:
-          node-version: '18'
-          cache: 'npm'
+          node-version: ${{ matrix.node }}
+          cache: npm
           cache-dependency-path: app/package-lock.json
 
       - name: Install dependencies
-        working-directory: ./app
-        run: npm ci
+        working-directory: app
+        run: npm ci --no-audit --no-fund
 
       - name: Run tests
-        working-directory: ./app
+        working-directory: app
         run: npm test
 
   build:
+    name: Build
     needs: test
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: '18'
-          cache: 'npm'
+          node-version: '22'
+          cache: npm
           cache-dependency-path: app/package-lock.json
 
       - name: Install dependencies
-        working-directory: ./app
-        run: npm ci
+        working-directory: app
+        run: npm ci --no-audit --no-fund
 
       - name: Build
-        working-directory: ./app
+        working-directory: app
         run: npm run build
 
   docker:
+    name: Docker build + smoke test
     needs: build
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    timeout-minutes: 10
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - name: Build Docker image
-        working-directory: ./app
-        run: docker build -t cicd-sample:${{ github.sha }} .
+      - name: Build image
+        working-directory: app
+        run: docker build -t cicd-sample:${GITHUB_SHA::7} .
 
-      - name: Verify image
-        run: docker images cicd-sample:${{ github.sha }}
+      - name: Run container and assert /health responds
+        run: |
+          docker run -d --name smoke -p 3000:3000 cicd-sample:${GITHUB_SHA::7}
+          ok=0
+          for i in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:3000/health > /dev/null; then ok=1; break; fi
+            sleep 1
+          done
+          echo "--- container logs ---"
+          docker logs smoke
+          docker rm -f smoke > /dev/null
+          [ "$ok" = "1" ]
