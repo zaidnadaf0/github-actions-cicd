@@ -6,9 +6,9 @@
   "scripts": {
     "start": "node server.js",
     "test": "node --test server.test.js",
-    "build": "echo 'Build complete'"
+    "build": "node --check server.js && echo 'Build complete'"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   }
 }

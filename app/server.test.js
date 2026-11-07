@@ -1,40 +1,32 @@
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert');
-const http = require('http');
 const { server } = require('./server');
 
-describe('Server', () => {
+describe('HTTP server', () => {
   let baseUrl;
 
-  before((_, done) => {
-    server.listen(0, () => {
-      const port = server.address().port;
-      baseUrl = `http://localhost:${port}`;
-      done();
+  before(async () => {
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    baseUrl = `http://127.0.0.1:${server.address().port}`;
+  });
+
+  after(async () => {
+    await new Promise((resolve, reject) => {
+      server.close((err) => (err ? reject(err) : resolve()));
     });
   });
 
-  after((_, done) => {
-    server.close(done);
+  it('serves the landing page at /', async () => {
+    const res = await fetch(`${baseUrl}/`);
+    assert.strictEqual(res.status, 200);
+    assert.match(res.headers.get('content-type'), /text\/html/);
+    assert.match(await res.text(), /CI\/CD Sample App/);
   });
 
-  it('responds with 200 on root path', (_, done) => {
-    http.get(baseUrl, (res) => {
-      assert.strictEqual(res.statusCode, 200);
-      done();
-    });
-  });
-
-  it('responds with health check JSON', (_, done) => {
-    http.get(`${baseUrl}/health`, (res) => {
-      assert.strictEqual(res.statusCode, 200);
-      let data = '';
-      res.on('data', (chunk) => { data += chunk; });
-      res.on('end', () => {
-        const body = JSON.parse(data);
-        assert.strictEqual(body.status, 'ok');
-        done();
-      });
-    });
+  it('returns 200 with {"status":"ok"} at /health', async () => {
+    const res = await fetch(`${baseUrl}/health`);
+    assert.strictEqual(res.status, 200);
+    assert.match(res.headers.get('content-type'), /application\/json/);
+    assert.deepStrictEqual(await res.json(), { status: 'ok' });
   });
 });
